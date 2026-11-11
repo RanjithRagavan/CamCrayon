@@ -1,0 +1,16 @@
+# Gradle & Kotlin Multiplatform build artifacts
+.gradle/
+.kotlin/
+build/
+**/build/
+
+# Local configuration & secrets (never commit API keys)
+local.properties
+
+# IDE & OS files
+.idea/
+*.iml
+.DS_Store
+xcuserdata/
+*.xcworkspace
+!default.xcworkspace
