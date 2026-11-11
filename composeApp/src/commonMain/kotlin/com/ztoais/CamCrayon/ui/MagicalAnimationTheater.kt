@@ -1,4 +1,4 @@
-package com.doodletales.ui
+package com.ztoais.CamCrayon.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
@@ -36,9 +36,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.doodletales.model.*
-import com.doodletales.platform.SoundEffectType
-import com.doodletales.platform.SoundEngine
+import com.ztoais.CamCrayon.model.*
+import com.ztoais.CamCrayon.platform.SoundEffectType
+import com.ztoais.CamCrayon.platform.SoundEngine
 import kotlinx.coroutines.delay
 import kotlin.math.*
 import kotlin.random.Random

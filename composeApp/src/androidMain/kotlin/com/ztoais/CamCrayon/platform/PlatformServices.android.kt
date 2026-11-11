@@ -1,4 +1,4 @@
-package com.doodletales.platform
+package com.ztoais.CamCrayon.platform
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -10,7 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import com.doodletales.model.RgbaBuffer
+import com.ztoais.CamCrayon.model.RgbaBuffer
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream

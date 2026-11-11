@@ -1,4 +1,4 @@
-package com.doodletales
+package com.ztoais.CamCrayon
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,16 +8,16 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.doodletales.ai.GeminiStoryEngine
-import com.doodletales.imaging.DrawingProcessor
-import com.doodletales.imaging.KidDrawingPreset
-import com.doodletales.model.AiConfig
-import com.doodletales.model.AiProvider
-import com.doodletales.model.LivingCreationBundle
-import com.doodletales.platform.*
-import com.doodletales.ui.AiKeyEvaluationDialog
-import com.doodletales.ui.CameraAndDrawingStudio
-import com.doodletales.ui.MagicalAnimationTheater
+import com.ztoais.CamCrayon.ai.GeminiStoryEngine
+import com.ztoais.CamCrayon.imaging.DrawingProcessor
+import com.ztoais.CamCrayon.imaging.KidDrawingPreset
+import com.ztoais.CamCrayon.model.AiConfig
+import com.ztoais.CamCrayon.model.AiProvider
+import com.ztoais.CamCrayon.model.LivingCreationBundle
+import com.ztoais.CamCrayon.platform.*
+import com.ztoais.CamCrayon.ui.AiKeyEvaluationDialog
+import com.ztoais.CamCrayon.ui.CameraAndDrawingStudio
+import com.ztoais.CamCrayon.ui.MagicalAnimationTheater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

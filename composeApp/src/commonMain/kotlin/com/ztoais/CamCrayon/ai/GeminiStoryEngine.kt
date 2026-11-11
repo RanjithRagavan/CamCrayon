@@ -1,10 +1,10 @@
-package com.doodletales.ai
+package com.ztoais.CamCrayon.ai
 
-import com.doodletales.imaging.DrawingProcessor
-import com.doodletales.imaging.KidDrawingPreset
-import com.doodletales.model.*
-import com.doodletales.platform.decodeImageBytesToRgba
-import com.doodletales.platform.rgbaBufferToImageBitmap
+import com.ztoais.CamCrayon.imaging.DrawingProcessor
+import com.ztoais.CamCrayon.imaging.KidDrawingPreset
+import com.ztoais.CamCrayon.model.*
+import com.ztoais.CamCrayon.platform.decodeImageBytesToRgba
+import com.ztoais.CamCrayon.platform.rgbaBufferToImageBitmap
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*

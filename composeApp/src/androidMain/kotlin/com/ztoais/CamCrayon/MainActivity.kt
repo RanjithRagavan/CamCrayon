@@ -1,4 +1,4 @@
-package com.doodletales
+package com.ztoais.CamCrayon
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

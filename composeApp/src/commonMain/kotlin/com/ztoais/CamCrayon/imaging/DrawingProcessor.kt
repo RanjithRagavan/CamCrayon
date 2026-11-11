@@ -1,6 +1,6 @@
-package com.doodletales.imaging
+package com.ztoais.CamCrayon.imaging
 
-import com.doodletales.model.*
+import com.ztoais.CamCrayon.model.*
 import kotlin.math.*
 import kotlin.random.Random
 

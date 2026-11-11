@@ -1,4 +1,4 @@
-package com.doodletales.ui
+package com.ztoais.CamCrayon.ui
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -16,8 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.doodletales.model.AiConfig
-import com.doodletales.model.AiProvider
+import com.ztoais.CamCrayon.model.AiConfig
+import com.ztoais.CamCrayon.model.AiProvider
 
 @Composable
 fun AiKeyEvaluationDialog(

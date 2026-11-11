@@ -1,4 +1,4 @@
-package com.doodletales
+package com.ztoais.CamCrayon
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -7,13 +7,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import org.jetbrains.skia.EncodedImageFormat
-import com.doodletales.ai.GeminiStoryEngine
-import com.doodletales.imaging.DrawingProcessor
-import com.doodletales.imaging.KidDrawingPreset
-import com.doodletales.model.AiConfig
-import com.doodletales.model.AiProvider
-import com.doodletales.platform.*
-import com.doodletales.ui.MagicalAnimationTheater
+import com.ztoais.CamCrayon.ai.GeminiStoryEngine
+import com.ztoais.CamCrayon.imaging.DrawingProcessor
+import com.ztoais.CamCrayon.imaging.KidDrawingPreset
+import com.ztoais.CamCrayon.model.AiConfig
+import com.ztoais.CamCrayon.model.AiProvider
+import com.ztoais.CamCrayon.platform.*
+import com.ztoais.CamCrayon.ui.MagicalAnimationTheater
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.imageio.ImageIO

@@ -1,4 +1,4 @@
-package com.doodletales.model
+package com.ztoais.CamCrayon.model
 
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.serialization.SerialName

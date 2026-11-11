@@ -1,12 +1,12 @@
-package com.doodletales.platform
+package com.ztoais.CamCrayon.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import com.doodletales.imaging.DrawingProcessor
-import com.doodletales.imaging.KidDrawingPreset
-import com.doodletales.model.RgbaBuffer
+import com.ztoais.CamCrayon.imaging.DrawingProcessor
+import com.ztoais.CamCrayon.imaging.KidDrawingPreset
+import com.ztoais.CamCrayon.model.RgbaBuffer
 import java.awt.FileDialog
 import java.awt.Frame
 import java.awt.image.BufferedImage

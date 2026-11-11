@@ -70,11 +70,11 @@ kotlin {
 }
 
 android {
-    namespace = "com.doodletales"
+    namespace = "com.ztoais.CamCrayon"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.doodletales"
+        applicationId = "com.ztoais.CamCrayon"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
@@ -100,7 +100,7 @@ android {
 
 compose.desktop {
     application {
-        mainClass = "com.doodletales.MainKt"
+        mainClass = "com.ztoais.CamCrayon.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)

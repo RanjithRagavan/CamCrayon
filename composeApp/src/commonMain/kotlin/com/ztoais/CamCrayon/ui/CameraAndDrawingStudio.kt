@@ -1,4 +1,4 @@
-package com.doodletales.ui
+package com.ztoais.CamCrayon.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -24,14 +24,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.doodletales.imaging.DrawingProcessor
-import com.doodletales.imaging.KidDrawingPreset
-import com.doodletales.model.AiConfig
-import com.doodletales.model.RgbaBuffer
-import com.doodletales.platform.PlatformMediaController
-import com.doodletales.platform.SoundEffectType
-import com.doodletales.platform.SoundEngine
-import com.doodletales.platform.rgbaBufferToImageBitmap
+import com.ztoais.CamCrayon.imaging.DrawingProcessor
+import com.ztoais.CamCrayon.imaging.KidDrawingPreset
+import com.ztoais.CamCrayon.model.AiConfig
+import com.ztoais.CamCrayon.model.RgbaBuffer
+import com.ztoais.CamCrayon.platform.PlatformMediaController
+import com.ztoais.CamCrayon.platform.SoundEffectType
+import com.ztoais.CamCrayon.platform.SoundEngine
+import com.ztoais.CamCrayon.platform.rgbaBufferToImageBitmap
 import kotlin.math.hypot
 
 enum class StudioInputTab(val label: String, val emoji: String) {

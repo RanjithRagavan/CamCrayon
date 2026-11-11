@@ -1,8 +1,8 @@
-package com.doodletales.platform
+package com.ztoais.CamCrayon.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
-import com.doodletales.model.RgbaBuffer
+import com.ztoais.CamCrayon.model.RgbaBuffer
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
