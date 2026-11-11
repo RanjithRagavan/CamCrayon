@@ -64,6 +64,11 @@ fun CameraAndDrawingStudio(
     val paperBitmap = remember(currentPaperBuffer) { rgbaBufferToImageBitmap(currentPaperBuffer) }
     val cutoutBitmap = remember(extractedCutoutBuffer) { rgbaBufferToImageBitmap(extractedCutoutBuffer) }
 
+    // Request runtime camera permission on Android when opening the Studio
+    LaunchedEffect(Unit) {
+        mediaController.requestCameraPermissionIfNeeded()
+    }
+
     // Animated laser scanner line for Camera Viewfinder
     val infiniteTransition = rememberInfiniteTransition()
     val scanLineProgress by infiniteTransition.animateFloat(
@@ -976,11 +981,79 @@ fun CameraAndDrawingStudio(
                             }
                         }
 
+                        // Voice Mic + Text Input for Character Name & Dream Adventure
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🎤 Tell or Type Your Character's Name & Dream:",
+                                color = Color(0xFF38BDF8),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Button(
+                                onClick = {
+                                    SoundEngine.playEffect(SoundEffectType.BUBBLE_POP)
+                                    mediaController.startVoiceInput { spokenText ->
+                                        onKidHintChanged(spokenText)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF0284C7),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "Speak",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Speak Idea",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
                         OutlinedTextField(
                             value = kidHintPrompt,
                             onValueChange = onKidHintChanged,
-                            label = { Text("Character name or dream adventure (Optional)", fontSize = 12.sp) },
+                            label = { Text("Tap 🎤 Mic to speak or type here (Optional)", fontSize = 12.sp) },
                             placeholder = { Text("e.g., Barnaby flies to the Sugar Cloud Castle!", fontSize = 12.sp) },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        SoundEngine.playEffect(SoundEffectType.BUBBLE_POP)
+                                        mediaController.startVoiceInput { spokenText ->
+                                            onKidHintChanged(spokenText)
+                                        }
+                                    }
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF0284C7),
+                                        modifier = Modifier.size(34.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.Mic,
+                                                contentDescription = "Speak character name and dream",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,

@@ -20,6 +20,8 @@ interface PlatformMediaController {
     val canCaptureFromDeviceCamera: Boolean
     fun captureFromCamera()
     fun pickFromGalleryOrFile()
+    fun startVoiceInput(onSpokenText: (String) -> Unit)
+    fun requestCameraPermissionIfNeeded() {}
 }
 
 expect fun rgbaBufferToImageBitmap(buffer: RgbaBuffer): ImageBitmap

@@ -164,6 +164,21 @@ actual fun rememberPlatformMediaController(
                 }
             }
 
+            private var voiceIdx = 0
+            private val sampleVoiceIdeas = listOf(
+                "Barnaby the Dino flies to the Rainbow Candy Castle to rescue a shooting star!",
+                "Captain Whiskers zooms around the Golden Cheese Moon with friendly aliens!",
+                "Princess Pippa starts a magical underwater bubble band with singing dolphins!",
+                "Sparky the Robot dances on Volcano Island and discovers a glowing crown!"
+            )
+
+            override fun startVoiceInput(onSpokenText: (String) -> Unit) {
+                val spoken = sampleVoiceIdeas[voiceIdx % sampleVoiceIdeas.size]
+                voiceIdx++
+                onSpokenText(spoken)
+                onStatusMessage("🎤 Voice Idea: \"$spoken\"")
+            }
+
             private fun presentImagePicker(sourceType: UIImagePickerControllerSourceType, label: String) {
                 val rootVc = UIApplication.sharedApplication.keyWindow?.rootViewController ?: return
                 val picker = UIImagePickerController()

@@ -476,9 +476,23 @@ fun MagicalAnimationTheater(
                     timeSec = timeSec
                 )
 
-                // F. Draw the Child's Extracted Character Puppet with Squash & Stretch + Articulated Wobble!
+                // F. Draw the Child's Extracted Character as a 5-Part Articulated Living Puppet Rig!
                 val isTalkingNow = highlightedWordIndex < words.size && !isPaused
                 val talkPulse = if (isTalkingNow) 0.04f * sin(timeSec * 24f) else 0f
+
+                // Ground footstep dust puffs / splashes when character bounces near the ground
+                if (heightAboveGround < basePuppetSize * 0.25f) {
+                    for (puffIdx in -1..1 step 2) {
+                        val puffPhase = (timeSec * 4.8f + (if (puffIdx < 0) 0f else 0.5f)) % 1f
+                        val puffX = pose.x + puffIdx * (basePuppetSize * 0.22f + puffPhase * 34f)
+                        val puffY = groundY + basePuppetSize * 0.10f - puffPhase * 18f
+                        drawCircle(
+                            color = Color.White.copy(alpha = (1f - puffPhase) * 0.55f),
+                            radius = (6f + puffPhase * 12f),
+                            center = Offset(puffX, puffY)
+                        )
+                    }
+                }
 
                 withTransform({
                     translate(left = pose.x, top = pose.y)
@@ -491,9 +505,9 @@ fun MagicalAnimationTheater(
                 }) {
                     // Magical golden aura glow when super-jumping or in hero mode
                     val auraAlpha = if (timeSec - superJumpBoostTime < 1.2f || activeMotion == MotionStyle.SUPER_HERO_ZOOM) {
-                        0.35f + 0.15f * sin(timeSec * 12f)
+                        0.38f + 0.15f * sin(timeSec * 12f)
                     } else {
-                        0.14f
+                        0.16f
                     }
                     drawCircle(
                         brush = Brush.radialGradient(
@@ -503,31 +517,21 @@ fun MagicalAnimationTheater(
                                 Color.Transparent
                             ),
                             center = Offset.Zero,
-                            radius = basePuppetSize * 0.68f
+                            radius = basePuppetSize * 0.72f
                         ),
-                        radius = basePuppetSize * 0.68f,
+                        radius = basePuppetSize * 0.72f,
                         center = Offset.Zero
                     )
 
-                    // Draw the extracted cutout bitmap
-                    val dstW = basePuppetSize.toInt().coerceAtLeast(32)
-                    val dstH = basePuppetSize.toInt().coerceAtLeast(32)
-                    drawImage(
-                        image = activePuppetBitmap,
-                        srcOffset = IntOffset.Zero,
-                        srcSize = IntSize(activePuppetBitmap.width, activePuppetBitmap.height),
-                        dstOffset = IntOffset(-dstW / 2, -dstH / 2),
-                        dstSize = IntSize(dstW, dstH)
+                    // Draw Articulated 5-Zone Skeletal Character Rig + Animated Appendages
+                    drawArticulatedCharacterPuppet(
+                        bitmap = activePuppetBitmap,
+                        puppetSize = basePuppetSize,
+                        motionStyle = activeMotion,
+                        timeSec = timeSec,
+                        isTalking = isTalkingNow,
+                        showFaceOverlay = showLivingFaceOverlay
                     )
-
-                    // Optional animated blinking eyes & talking mouth bounce overlay
-                    if (showLivingFaceOverlay) {
-                        drawLivingExpressionOverlay(
-                            puppetSize = basePuppetSize,
-                            timeSec = timeSec,
-                            isTalking = isTalkingNow
-                        )
-                    }
                 }
 
                 // G. Draw Ambient + Interactive Burst Particles
@@ -1121,6 +1125,9 @@ private fun DrawScope.drawBiomeWorld(
     val groundColor = parseHexColor(scene.groundColorHex, Color(0xFF4ADE80))
     val accentColor = parseHexColor(scene.accentColorHex, Color(0xFFF472B6))
 
+    // Continuous multi-layer parallax camera scroll so the world moves dynamically around the hero!
+    val worldScroll = timeSec * 115f * scene.speedMultiplier.coerceIn(0.8f, 1.5f)
+
     // 1. Sky Gradient
     drawRect(
         brush = Brush.verticalGradient(
@@ -1131,19 +1138,20 @@ private fun DrawScope.drawBiomeWorld(
         size = Size(w, h)
     )
 
-    // 2. Biome-Specific Sky & Mid-Ground Scenery
+    // 2. Biome-Specific Dynamic Parallax Sky, Landmarks & Interactive Scene Actors
     when (biome) {
         WorldBiome.SUNNY_MEADOW -> {
-            // Spinning sun with rays
-            val sunCenter = Offset(w * 0.85f, h * 0.18f)
+            // Spinning sun with pulsing rays
+            val sunCenter = Offset(w * 0.84f, h * 0.17f)
             for (rIdx in 0 until 12) {
-                val angle = (rIdx * 30f + timeSec * 18f) * (PI.toFloat() / 180f)
+                val angle = (rIdx * 30f + timeSec * 25f) * (PI.toFloat() / 180f)
+                val rayLen = w * (0.095f + 0.02f * sin(timeSec * 5f + rIdx))
                 drawLine(
-                    color = Color(0xFFFDE047).copy(alpha = 0.45f),
+                    color = Color(0xFFFDE047).copy(alpha = 0.55f),
                     start = sunCenter,
                     end = Offset(
-                        sunCenter.x + cos(angle) * (w * 0.11f),
-                        sunCenter.y + sin(angle) * (w * 0.11f)
+                        sunCenter.x + cos(angle) * rayLen,
+                        sunCenter.y + sin(angle) * rayLen
                     ),
                     strokeWidth = 6f,
                     cap = StrokeCap.Round
@@ -1151,7 +1159,7 @@ private fun DrawScope.drawBiomeWorld(
             }
             drawCircle(color = Color(0xFFFACC15), radius = w * 0.048f, center = sunCenter)
 
-            // Rainbow Arch across the meadow sky
+            // Shimmering Rainbow Arch across the meadow sky
             val rainbowColors = listOf(
                 Color(0xFFEF4444),
                 Color(0xFFF97316),
@@ -1160,54 +1168,90 @@ private fun DrawScope.drawBiomeWorld(
                 Color(0xFF38BDF8),
                 Color(0xFFA855F7)
             )
+            val rainbowShift = 18f * sin(timeSec * 1.4f)
             rainbowColors.forEachIndexed { idx, rc ->
                 val pad = idx * 9f
                 drawArc(
-                    color = rc.copy(alpha = 0.28f),
+                    color = rc.copy(alpha = 0.34f),
                     startAngle = 180f,
                     sweepAngle = 180f,
                     useCenter = false,
-                    topLeft = Offset(w * 0.12f + pad, h * 0.14f + pad),
-                    size = Size(w * 0.76f - pad * 2, h * 0.95f - pad * 2),
-                    style = Stroke(width = 8f)
+                    topLeft = Offset(w * 0.10f + pad + rainbowShift, h * 0.12f + pad),
+                    size = Size(w * 0.80f - pad * 2, h * 0.95f - pad * 2),
+                    style = Stroke(width = 8.5f)
                 )
             }
 
-            // Drifting puffy clouds
-            drawParallaxClouds(timeSec, w, h, Color.White.copy(alpha = 0.88f))
+            drawParallaxClouds(timeSec, w, h, Color.White.copy(alpha = 0.90f))
+
+            // Scrolling Midground Bouncing Magic Mushrooms & Spinning Golden Star-Gates
+            for (m in 0 until 4) {
+                val mx = ((m * (w * 0.34f) - worldScroll * 0.55f) % (w * 1.36f) + (w * 1.36f)) % (w * 1.36f) - w * 0.18f
+                val bounce = abs(sin(timeSec * 4.5f + m)) * 12f
+                val baseY = h * 0.72f
+                // Mushroom stem
+                drawRoundRect(
+                    color = Color(0xFFFEF3C7),
+                    topLeft = Offset(mx - 9f, baseY - 26f - bounce),
+                    size = Size(18f, 30f + bounce),
+                    cornerRadius = CornerRadius(6f, 6f)
+                )
+                // Red spotted cap
+                drawOval(
+                    color = Color(0xFFEF4444),
+                    topLeft = Offset(mx - 26f, baseY - 44f - bounce),
+                    size = Size(52f, 26f)
+                )
+                drawCircle(Color.White, radius = 4.5f, center = Offset(mx - 10f, baseY - 33f - bounce))
+                drawCircle(Color.White, radius = 5.5f, center = Offset(mx + 6f, baseY - 35f - bounce))
+            }
         }
 
         WorldBiome.STARRY_SPACE -> {
-            // Twinkling stars
-            for (s in 0 until 48) {
-                val sx = ((s * 73) % 100) / 100f * w
+            // Scrolling & twinkling starfield
+            for (s in 0 until 52) {
+                val rawX = ((s * 73) % 100) / 100f * w - worldScroll * (if (s % 2 == 0) 0.18f else 0.35f)
+                val sx = ((rawX % w) + w) % w
                 val sy = ((s * 41) % 72) / 100f * h
-                val twinkle = 0.35f + 0.65f * abs(sin(timeSec * 3f + s))
+                val twinkle = 0.35f + 0.65f * abs(sin(timeSec * 3.8f + s))
                 drawCircle(
                     color = Color.White.copy(alpha = twinkle),
-                    radius = if (s % 4 == 0) 3.8f else 2.2f,
+                    radius = if (s % 4 == 0) 4.2f else 2.4f,
                     center = Offset(sx, sy)
                 )
             }
-            // Ringed Saturn planet
-            val planetCenter = Offset(w * 0.80f, h * 0.24f)
+            // Orbiting Ringed Saturn & Golden Cheese Moon
+            val planetX = ((w * 0.80f - worldScroll * 0.14f) % (w * 1.2f) + w * 1.2f) % (w * 1.2f) - w * 0.1f
+            val planetCenter = Offset(planetX, h * 0.24f + 10f * sin(timeSec * 1.8f))
             drawCircle(
                 color = Color(0xFFF59E0B),
                 radius = w * 0.055f,
                 center = planetCenter
             )
             drawOval(
-                color = Color(0xFFFDE047).copy(alpha = 0.75f),
+                color = Color(0xFFFDE047).copy(alpha = 0.80f),
                 topLeft = Offset(planetCenter.x - w * 0.095f, planetCenter.y - h * 0.02f),
                 size = Size(w * 0.19f, h * 0.04f),
                 style = Stroke(width = 6f)
             )
+
+            // Scrolling Cosmic Star-Rings that the character flies through
+            for (ring in 0 until 3) {
+                val rx = ((ring * (w * 0.45f) - worldScroll * 0.65f) % (w * 1.35f) + w * 1.35f) % (w * 1.35f) - w * 0.15f
+                val ry = h * (0.42f + 0.08f * sin(timeSec * 2f + ring))
+                drawOval(
+                    color = Color(0xFF38BDF8).copy(alpha = 0.65f),
+                    topLeft = Offset(rx - 18f, ry - 48f),
+                    size = Size(36f, 96f),
+                    style = Stroke(width = 5f)
+                )
+            }
         }
 
         WorldBiome.OCEAN_REEF -> {
             // Underwater sun-rays / caustics
             for (beam in 0 until 6) {
-                val bx = w * (0.12f + beam * 0.16f) + 20f * sin(timeSec + beam)
+                val bx = w * (0.12f + beam * 0.16f) + 28f * sin(timeSec * 1.5f + beam)
                 val path = Path().apply {
                     moveTo(bx - 20f, 0f)
                     lineTo(bx + 25f, 0f)
@@ -1215,30 +1259,41 @@ private fun DrawScope.drawBiomeWorld(
                     lineTo(bx - 65f, h * 0.85f)
                     close()
                 }
-                drawPath(path, Color.White.copy(alpha = 0.10f))
+                drawPath(path, Color.White.copy(alpha = 0.12f))
             }
-            // Swaying kelp / seaweed strands
+            // Scrolling Swaying Kelp & Leaping Friendly Dolphins
             for (k in 0 until 9) {
-                val kx = w * (0.06f + k * 0.11f)
-                val sway = 18f * sin(timeSec * 2.2f + k)
+                val kx = ((k * (w * 0.14f) - worldScroll * 0.5f) % (w * 1.26f) + w * 1.26f) % (w * 1.26f) - w * 0.1f
+                val sway = 22f * sin(timeSec * 2.8f + k)
                 val path = Path().apply {
                     moveTo(kx, h * 0.85f)
-                    quadraticTo(kx + sway, h * 0.70f, kx - sway * 0.6f, h * 0.56f)
+                    quadraticTo(kx + sway, h * 0.68f, kx - sway * 0.6f, h * 0.52f)
                 }
                 drawPath(
                     path = path,
-                    color = Color(0xFF10B981).copy(alpha = 0.75f),
+                    color = Color(0xFF10B981).copy(alpha = 0.78f),
                     style = Stroke(width = 12f, cap = StrokeCap.Round)
                 )
+            }
+            // Swimming School of Colorful Reef Fish
+            for (fish in 0 until 4) {
+                val fx = ((fish * (w * 0.30f) + worldScroll * 0.75f) % (w * 1.2f)) - w * 0.1f
+                val fy = h * (0.30f + (fish % 3) * 0.11f) + 12f * sin(timeSec * 4f + fish)
+                drawOval(
+                    color = if (fish % 2 == 0) Color(0xFFF97316) else Color(0xFFFACC15),
+                    topLeft = Offset(fx - 16f, fy - 9f),
+                    size = Size(32f, 18f)
+                )
+                drawCircle(Color.White, radius = 3f, center = Offset(fx + 8f, fy - 2f))
             }
         }
 
         WorldBiome.CANDY_KINGDOM -> {
-            drawParallaxClouds(timeSec, w, h, Color(0xFFFBCFE8).copy(alpha = 0.90f))
-            // Giant Lollipops in background hills
+            drawParallaxClouds(timeSec, w, h, Color(0xFFFBCFE8).copy(alpha = 0.92f))
+            // Scrolling Spinning Peppermint Lollipops & Candy Towers
             for (lp in 0 until 5) {
-                val lx = w * (0.14f + lp * 0.18f)
-                val ly = h * (0.58f + (lp % 2) * 0.05f)
+                val lx = ((lp * (w * 0.25f) - worldScroll * 0.55f) % (w * 1.25f) + w * 1.25f) % (w * 1.25f) - w * 0.1f
+                val ly = h * (0.54f + (lp % 2) * 0.06f)
                 drawLine(
                     color = Color.White,
                     start = Offset(lx, ly),
@@ -1247,42 +1302,54 @@ private fun DrawScope.drawBiomeWorld(
                 )
                 drawCircle(
                     color = if (lp % 2 == 0) Color(0xFFEC4899) else Color(0xFF38BDF8),
-                    radius = 24f,
+                    radius = 26f,
                     center = Offset(lx, ly)
                 )
-                drawCircle(
-                    color = Color.White,
-                    radius = 14f,
-                    center = Offset(lx, ly),
-                    style = Stroke(width = 4f)
-                )
+                // Spinning peppermint blades
+                for (b in 0 until 4) {
+                    val ang = (b * 90f + timeSec * 120f) * (PI.toFloat() / 180f)
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(lx, ly),
+                        end = Offset(lx + cos(ang) * 22f, ly + sin(ang) * 22f),
+                        strokeWidth = 4.5f,
+                        cap = StrokeCap.Round
+                    )
+                }
             }
         }
 
         WorldBiome.ENCHANTED_FOREST -> {
-            // Glowing moon & mystical trees
+            // Glowing moon & scrolling mystical pine trees with swinging lanterns
             drawCircle(
-                color = Color(0xFFFEF08A).copy(alpha = 0.9f),
-                radius = w * 0.05f,
+                color = Color(0xFFFEF08A).copy(alpha = 0.92f),
+                radius = w * 0.052f,
                 center = Offset(w * 0.16f, h * 0.20f)
             )
             for (tree in 0 until 7) {
-                val tx = w * (0.08f + tree * 0.14f)
-                val treeTopY = h * (0.38f + (tree % 3) * 0.05f)
+                val tx = ((tree * (w * 0.18f) - worldScroll * 0.48f) % (w * 1.26f) + w * 1.26f) % (w * 1.26f) - w * 0.1f
+                val sway = 8f * sin(timeSec * 2.2f + tree)
+                val treeTopY = h * (0.36f + (tree % 3) * 0.05f)
                 val path = Path().apply {
-                    moveTo(tx, treeTopY)
-                    lineTo(tx - 48f, h * 0.80f)
-                    lineTo(tx + 48f, h * 0.80f)
+                    moveTo(tx + sway, treeTopY)
+                    lineTo(tx - 50f, h * 0.80f)
+                    lineTo(tx + 50f, h * 0.80f)
                     close()
                 }
-                drawPath(path, Color(0xFF065F46).copy(alpha = 0.65f))
+                drawPath(path, Color(0xFF065F46).copy(alpha = 0.72f))
+                // Glowing fairy lantern on each tree
+                drawCircle(
+                    color = Color(0xFFFDE047).copy(alpha = 0.75f + 0.25f * sin(timeSec * 5f + tree)),
+                    radius = 6f,
+                    center = Offset(tx + sway * 0.5f, treeTopY + 34f)
+                )
             }
         }
 
         WorldBiome.VOLCANO_ISLAND -> {
             drawParallaxClouds(timeSec, w, h, Color.White.copy(alpha = 0.85f))
-            // Friendly smiling volcano in the distance puffing golden hearts/stars
-            val vx = w * 0.78f
+            // Scrolling Friendly Volcano puffing animated rising lava-bubbles/sparks!
+            val vx = ((w * 0.78f - worldScroll * 0.35f) % (w * 1.3f) + w * 1.3f) % (w * 1.3f) - w * 0.15f
             val volcanoPath = Path().apply {
                 moveTo(vx - 45f, h * 0.42f)
                 lineTo(vx + 45f, h * 0.42f)
@@ -1291,31 +1358,42 @@ private fun DrawScope.drawBiomeWorld(
                 close()
             }
             drawPath(volcanoPath, Color(0xFF78350F))
-            // Lava crown
             drawRoundRect(
                 color = Color(0xFFF97316),
                 topLeft = Offset(vx - 48f, h * 0.40f),
                 size = Size(96f, 18f),
                 cornerRadius = CornerRadius(9f, 9f)
             )
+            // Erupting golden lava puffs rising from volcano crater
+            for (puff in 0 until 4) {
+                val pCycle = (timeSec * 0.85f + puff * 0.25f) % 1f
+                val py = h * 0.38f - pCycle * (h * 0.26f)
+                val px = vx + sin(timeSec * 3f + puff * 2f) * (28f * pCycle)
+                drawCircle(
+                    color = Color(0xFFFACC15).copy(alpha = (1f - pCycle) * 0.85f),
+                    radius = 8f + pCycle * 14f,
+                    center = Offset(px, py)
+                )
+            }
         }
     }
 
-    // 3. Rolling Parallax Mid-Ground Hills & Foreground Stage Floor
-    val hillColorBack = groundColor.copy(alpha = 0.55f)
-    for (hill in 0 until 4) {
-        val hx = w * (hill * 0.32f) - ((timeSec * 18f) % (w * 0.32f))
+    // 3. Rolling Parallax Mid-Ground Hills (Scrolling at 0.75x camera speed)
+    val hillColorBack = groundColor.copy(alpha = 0.58f)
+    for (hill in 0 until 5) {
+        val span = w * 0.38f
+        val hx = ((hill * span - worldScroll * 0.75f) % (span * 5f) + (span * 5f)) % (span * 5f) - span
         drawOval(
             color = hillColorBack,
-            topLeft = Offset(hx - w * 0.15f, h * 0.66f),
-            size = Size(w * 0.55f, h * 0.36f)
+            topLeft = Offset(hx, h * 0.65f),
+            size = Size(w * 0.52f, h * 0.36f)
         )
     }
 
-    // Foreground ground meadow/stage
+    // 4. Foreground Stage Ground + Fast-Scrolling Foreground Flowers / Pebbles (1.35x Parallax Speed)
     drawRect(
         brush = Brush.verticalGradient(
-            colors = listOf(groundColor, groundColor.copy(red = groundColor.red * 0.75f, green = groundColor.green * 0.75f, blue = groundColor.blue * 0.75f)),
+            colors = listOf(groundColor, groundColor.copy(red = groundColor.red * 0.72f, green = groundColor.green * 0.72f, blue = groundColor.blue * 0.72f)),
             startY = h * 0.76f,
             endY = h
         ),
@@ -1323,13 +1401,17 @@ private fun DrawScope.drawBiomeWorld(
         size = Size(w, h * 0.24f)
     )
 
-    // Foreground flowers / pebbles / coral dots
-    for (f in 0 until 12) {
-        val fx = ((f * 97f + timeSec * 25f) % w)
-        val fy = h * (0.81f + (f % 3) * 0.05f)
+    for (f in 0 until 14) {
+        val fx = ((f * (w / 10f) - worldScroll * 1.35f) % w + w) % w
+        val fy = h * (0.80f + (f % 3) * 0.055f)
         drawCircle(
             color = if (f % 2 == 0) accentColor else Color(0xFFFDE047),
-            radius = 5.5f,
+            radius = 6.5f,
+            center = Offset(fx, fy)
+        )
+        drawCircle(
+            color = Color.White,
+            radius = 2.5f,
             center = Offset(fx, fy)
         )
     }
@@ -1341,12 +1423,179 @@ private fun DrawScope.drawParallaxClouds(
     h: Float,
     cloudColor: Color
 ) {
-    for (c in 0 until 4) {
-        val cx = ((c * w * 0.28f + timeSec * (14f + c * 4f)) % (w + 160f)) - 80f
-        val cy = h * (0.14f + (c % 2) * 0.09f)
+    for (c in 0 until 5) {
+        val cx = ((c * w * 0.26f - timeSec * (32f + c * 7f)) % (w + 180f) + (w + 180f)) % (w + 180f) - 90f
+        val cy = h * (0.13f + (c % 2) * 0.09f) + 5f * sin(timeSec * 1.5f + c)
         drawCircle(cloudColor, radius = 28f, center = Offset(cx, cy))
         drawCircle(cloudColor, radius = 36f, center = Offset(cx + 26f, cy - 6f))
         drawCircle(cloudColor, radius = 26f, center = Offset(cx + 54f, cy + 2f))
+    }
+}
+
+/**
+ * Renders the child's extracted character drawing as a 5-Part Articulated 2D Skeletal Puppet Rig!
+ * - Splits the character into Head, Left Wing/Arm, Right Wing/Arm, Core Torso, and Left/Right Walking Legs
+ * - Adds animated flapping golden wings, animated walking/kicking feet, and animated blinking eyes & talking mouth!
+ */
+private fun DrawScope.drawArticulatedCharacterPuppet(
+    bitmap: ImageBitmap,
+    puppetSize: Float,
+    motionStyle: MotionStyle,
+    timeSec: Float,
+    isTalking: Boolean,
+    showFaceOverlay: Boolean
+) {
+    val bw = bitmap.width.coerceAtLeast(1)
+    val bh = bitmap.height.coerceAtLeast(1)
+    val dstW = puppetSize.toInt().coerceAtLeast(48)
+    val dstH = puppetSize.toInt().coerceAtLeast(48)
+    val halfW = dstW / 2
+    val halfH = dstH / 2
+
+    val strideFreq = when (motionStyle) {
+        MotionStyle.SUPER_HERO_ZOOM, MotionStyle.FLY_LOOP -> 12f
+        MotionStyle.DANCE_SPIN -> 10.5f
+        else -> 8.5f
+    }
+    val armFlapDeg = 26f * sin(timeSec * strideFreq)
+    val legSwingDeg = 24f * sin(timeSec * strideFreq)
+    val headNodDeg = (if (isTalking) 9f * sin(timeSec * 15f) else 5.5f * sin(timeSec * 5f))
+
+    // 1. Animated Flowing Hero Cape + Flapping Golden Fairy Wings behind the character's shoulders
+    val capeWave = 14f * sin(timeSec * 9f)
+    val capePath = Path().apply {
+        moveTo(-puppetSize * 0.14f, -puppetSize * 0.10f)
+        lineTo(puppetSize * 0.14f, -puppetSize * 0.10f)
+        lineTo(puppetSize * 0.28f + capeWave, puppetSize * 0.34f)
+        lineTo(-puppetSize * 0.28f + capeWave, puppetSize * 0.34f)
+        close()
+    }
+    drawPath(
+        path = capePath,
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFFF43F5E).copy(alpha = 0.85f), Color(0xFFA855F7).copy(alpha = 0.85f))
+        )
+    )
+
+    for (side in listOf(-1f, 1f)) {
+        val shoulderX = side * (puppetSize * 0.24f)
+        val shoulderY = -puppetSize * 0.06f
+        withTransform({
+            translate(shoulderX, shoulderY)
+            rotate(degrees = side * (armFlapDeg * 1.25f - 12f), pivot = Offset.Zero)
+        }) {
+            drawOval(
+                color = Color(0xFFFDE047).copy(alpha = 0.85f),
+                topLeft = Offset(if (side < 0f) -puppetSize * 0.28f else 0f, -puppetSize * 0.11f),
+                size = Size(puppetSize * 0.28f, puppetSize * 0.18f)
+            )
+            drawOval(
+                color = Color.White,
+                topLeft = Offset(if (side < 0f) -puppetSize * 0.28f else 0f, -puppetSize * 0.11f),
+                size = Size(puppetSize * 0.28f, puppetSize * 0.18f),
+                style = Stroke(width = 3f)
+            )
+        }
+    }
+
+    // 2. Articulated Left & Right Leg Slices (Bottom 66%..100% of character bitmap, pivoting at hips!)
+    val legSrcY = (bh * 0.66f).toInt()
+    val legSrcH = (bh - legSrcY).coerceAtLeast(1)
+    val legDstY = (-halfH + (dstH * 0.66f)).toInt()
+    val legDstH = (dstH - (dstH * 0.66f).toInt()).coerceAtLeast(1)
+
+    // Left Leg Slice + Animated Walking Foot
+    withTransform({
+        rotate(degrees = legSwingDeg, pivot = Offset(-puppetSize * 0.14f, puppetSize * 0.18f))
+    }) {
+        drawImage(
+            image = bitmap,
+            srcOffset = IntOffset(0, legSrcY),
+            srcSize = IntSize(bw / 2, legSrcH),
+            dstOffset = IntOffset(-halfW, legDstY),
+            dstSize = IntSize(halfW, legDstH)
+        )
+    }
+
+    // Right Leg Slice + Opposite Phase Walking Foot
+    withTransform({
+        rotate(degrees = -legSwingDeg, pivot = Offset(puppetSize * 0.14f, puppetSize * 0.18f))
+    }) {
+        drawImage(
+            image = bitmap,
+            srcOffset = IntOffset(bw / 2, legSrcY),
+            srcSize = IntSize(bw - bw / 2, legSrcH),
+            dstOffset = IntOffset(0, legDstY),
+            dstSize = IntSize(dstW - halfW, legDstH)
+        )
+    }
+
+    // 3. Articulated Left & Right Arm / Wing Slices (Outer 28% of middle section, flapping at shoulders!)
+    val midSrcY = (bh * 0.28f).toInt()
+    val midSrcH = (bh * 0.44f).toInt().coerceAtLeast(1)
+    val armSrcW = (bw * 0.28f).toInt().coerceAtLeast(1)
+    val midDstY = (-halfH + (dstH * 0.28f)).toInt()
+    val midDstH = (dstH * 0.44f).toInt().coerceAtLeast(1)
+    val armDstW = (dstW * 0.28f).toInt().coerceAtLeast(1)
+
+    withTransform({
+        rotate(degrees = armFlapDeg, pivot = Offset(-puppetSize * 0.22f, -puppetSize * 0.05f))
+    }) {
+        drawImage(
+            image = bitmap,
+            srcOffset = IntOffset(0, midSrcY),
+            srcSize = IntSize(armSrcW, midSrcH),
+            dstOffset = IntOffset(-halfW, midDstY),
+            dstSize = IntSize(armDstW, midDstH)
+        )
+    }
+
+    withTransform({
+        rotate(degrees = -armFlapDeg, pivot = Offset(puppetSize * 0.22f, -puppetSize * 0.05f))
+    }) {
+        drawImage(
+            image = bitmap,
+            srcOffset = IntOffset(bw - armSrcW, midSrcY),
+            srcSize = IntSize(armSrcW, midSrcH),
+            dstOffset = IntOffset(halfW - armDstW, midDstY),
+            dstSize = IntSize(armDstW, midDstH)
+        )
+    }
+
+    // 4. Core Torso Slice (Center body with subtle breathing)
+    val torsoSrcX = (bw * 0.16f).toInt()
+    val torsoSrcW = (bw * 0.68f).toInt().coerceAtLeast(1)
+    val torsoDstX = -halfW + (dstW * 0.16f).toInt()
+    val torsoDstW = (dstW * 0.68f).toInt().coerceAtLeast(1)
+    drawImage(
+        image = bitmap,
+        srcOffset = IntOffset(torsoSrcX, midSrcY),
+        srcSize = IntSize(torsoSrcW, midSrcH),
+        dstOffset = IntOffset(torsoDstX, midDstY),
+        dstSize = IntSize(torsoDstW, midDstH)
+    )
+
+    // 5. Articulated Head & Crown Slice (Top 0%..38% of character bitmap, nodding & tilting with speech!)
+    val headSrcH = (bh * 0.38f).toInt().coerceAtLeast(1)
+    val headDstH = (dstH * 0.38f).toInt().coerceAtLeast(1)
+    withTransform({
+        rotate(degrees = headNodDeg, pivot = Offset(0f, -puppetSize * 0.14f))
+    }) {
+        drawImage(
+            image = bitmap,
+            srcOffset = IntOffset(0, 0),
+            srcSize = IntSize(bw, headSrcH),
+            dstOffset = IntOffset(-halfW, -halfH),
+            dstSize = IntSize(dstW, headDstH)
+        )
+
+        if (showFaceOverlay) {
+            drawLivingExpressionOverlay(
+                puppetSize = puppetSize,
+                timeSec = timeSec,
+                isTalking = isTalking
+            )
+        }
     }
 }
 
@@ -1487,8 +1736,32 @@ private fun DrawScope.drawLivingExpressionOverlay(
     timeSec: Float,
     isTalking: Boolean
 ) {
-    // Sparkling magical halo crown & animated talking sound-rings around the character
-    // so it enhances any child's drawing without covering the child's hand-drawn face!
+    // 1. Animated Waving Magic Star-Wand next to the character's hand
+    val wandAngle = 22f * sin(timeSec * 8f)
+    withTransform({
+        translate(puppetSize * 0.34f, -puppetSize * 0.04f)
+        rotate(wandAngle, pivot = Offset.Zero)
+    }) {
+        drawLine(
+            color = Color(0xFFF59E0B),
+            start = Offset(0f, 14f),
+            end = Offset(14f, -18f),
+            strokeWidth = 4.5f,
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = Color(0xFFFDE047),
+            radius = 8f + 2f * abs(sin(timeSec * 12f)),
+            center = Offset(14f, -18f)
+        )
+        drawCircle(
+            color = Color.White,
+            radius = 4f,
+            center = Offset(14f, -18f)
+        )
+    }
+
+    // 2. Sparkling magical halo crown & animated talking sound-rings around the character
     val crownY = -puppetSize * 0.46f
     val bob = 4f * sin(timeSec * 6f)
     drawCircle(

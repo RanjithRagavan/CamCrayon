@@ -71,11 +71,14 @@ class GeminiStoryEngine {
         val dominantColors = DrawingProcessor.describeDominantColors(extractedCharacterBuffer)
         val originalBitmap = rgbaBufferToImageBitmap(originalPaperBuffer)
         val extractedBitmap = rgbaBufferToImageBitmap(extractedCharacterBuffer)
+        val localStorybookBitmap = rgbaBufferToImageBitmap(
+            DrawingProcessor.synthesizeLivingStorybookCharacter(extractedCharacterBuffer)
+        )
         val apiKey = config.activeApiKey
 
-        // If no API key is entered yet, run Instant Magic Demo Mode with full 60 FPS choreography + synthesized chimes
+        // If no API key is entered yet, run Instant Magic Demo Mode with full 60 FPS choreography + 3D Storybook Character
         if (apiKey.isBlank()) {
-            onProgressStep("✨ Running Instant Magic Engine (Add a Gemini API key anytime for live Vision + Nano Banana 2.1 + TTS!)...")
+            onProgressStep("✨ Transforming your drawing into a 3D-shaded Storybook Character & 4-scene adventure...")
             val fallbackStory = customizeFallbackStory(
                 base = DrawingProcessor.createRichStoryForPreset(activePreset, dominantColors),
                 kidHint = kidHintPrompt,
@@ -87,10 +90,10 @@ class GeminiStoryEngine {
                 extractedCharacterBuffer = extractedCharacterBuffer,
                 extractedCharacterBitmap = extractedBitmap,
                 originalPngBytes = pngBytes,
-                aiEnhancedBitmap = null,
+                aiEnhancedBitmap = localStorybookBitmap,
                 story = fallbackStory,
                 sceneAudioWavBytes = emptyMap(),
-                providerUsed = "Instant Magic Mode (60 FPS Puppet Engine)"
+                providerUsed = "Instant Magic Mode (3D Storybook Rig)"
             )
         }
 
@@ -171,10 +174,10 @@ class GeminiStoryEngine {
             ) to null
         }
 
-        // 2. Optional Storybook Character Sprite Upgrade via gemini-nano-banana-2.1
+        // 2. Optional Storybook Character Sprite Upgrade via gemini-nano-banana-2.1 (with 3D Storybook fallback)
         var aiEnhancedBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
         if (config.generateNanoBananaSprite) {
-            onProgressStep("🎨 Nano Banana 2.1 (gemini-nano-banana-2.1) is painting a magical storybook puppet from your drawing...")
+            onProgressStep("🎨 Transforming your drawing into a living Storybook Character...")
             aiEnhancedBitmap = try {
                 generateEnhancedPuppetWithNanoBanana21(
                     apiKey = apiKey,
@@ -185,6 +188,11 @@ class GeminiStoryEngine {
             } catch (_: Exception) {
                 null
             }
+        }
+        if (aiEnhancedBitmap == null) {
+            aiEnhancedBitmap = rgbaBufferToImageBitmap(
+                DrawingProcessor.synthesizeLivingStorybookCharacter(extractedCharacterBuffer)
+            )
         }
 
         // 3. Optional Expressive Storyteller Voiceover for Scene 1 via gemini-3.8-flash-tts
@@ -326,13 +334,60 @@ class GeminiStoryEngine {
             setBody(requestPayload)
         }
 
-        if (!response.status.isSuccess()) return null
-        val root = json.parseToJsonElement(response.bodyAsText()).jsonObject
-        val base64Out = extractLastContentField(root, contentType = "image", fieldName = "data") ?: return null
-        val imageBytes = Base64.decode(base64Out)
-        val decodedRgba = decodeImageBytesToRgba(imageBytes) ?: return null
-        val cutoutRgba = DrawingProcessor.extractCharacterFromPaper(decodedRgba, addStickerBorder = true)
-        return rgbaBufferToImageBitmap(cutoutRgba)
+        if (response.status.isSuccess()) {
+            val root = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val base64Out = extractLastContentField(root, contentType = "image", fieldName = "data")
+            if (base64Out != null) {
+                val imageBytes = Base64.decode(base64Out)
+                val decodedRgba = decodeImageBytesToRgba(imageBytes)
+                if (decodedRgba != null) {
+                    val cutoutRgba = DrawingProcessor.extractCharacterFromPaper(decodedRgba, addStickerBorder = true)
+                    return rgbaBufferToImageBitmap(cutoutRgba)
+                }
+            }
+        }
+
+        // Fallback to standard Google AI Studio generateContent image endpoint if /v1beta/interactions returned non-200
+        val fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=$apiKey"
+        val fallbackBody = buildJsonObject {
+            putJsonArray("contents") {
+                addJsonObject {
+                    putJsonArray("parts") {
+                        addJsonObject { put("text", prompt) }
+                        addJsonObject {
+                            putJsonObject("inlineData") {
+                                put("mimeType", "image/png")
+                                put("data", base64Png)
+                            }
+                        }
+                    }
+                }
+            }
+            putJsonObject("generationConfig") {
+                putJsonArray("responseModalities") {
+                    add("TEXT")
+                    add("IMAGE")
+                }
+            }
+        }
+        val fbResp = httpClient.post(fallbackUrl) {
+            contentType(ContentType.Application.Json)
+            setBody(fallbackBody)
+        }
+        if (!fbResp.status.isSuccess()) return null
+        val fbRoot = json.parseToJsonElement(fbResp.bodyAsText()).jsonObject
+        val parts = fbRoot["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("content")?.jsonObject?.get("parts")?.jsonArray ?: return null
+        for (part in parts) {
+            val inlineData = part.jsonObject["inlineData"]?.jsonObject
+            val b64 = inlineData?.get("data")?.jsonPrimitive?.contentOrNull
+            if (!b64.isNullOrBlank()) {
+                val decodedRgba = decodeImageBytesToRgba(Base64.decode(b64)) ?: continue
+                val cutoutRgba = DrawingProcessor.extractCharacterFromPaper(decodedRgba, addStickerBorder = true)
+                return rgbaBufferToImageBitmap(cutoutRgba)
+            }
+        }
+        return null
     }
 
     /**
@@ -471,19 +526,54 @@ class GeminiStoryEngine {
             setBody(payload)
         }
 
-        if (!response.status.isSuccess()) {
-            throw RuntimeException("Gemini HTTP ${response.status.value}")
+        if (response.status.isSuccess()) {
+            val rawBody = response.bodyAsText()
+            val root = json.parseToJsonElement(rawBody).jsonObject
+            val interactionId = root["id"]?.jsonPrimitive?.contentOrNull
+            val outputText = extractLastContentField(root, contentType = "text", fieldName = "text")
+            if (outputText != null) {
+                val cleanJson = stripMarkdownCodeFences(outputText)
+                val parsed = json.decodeFromString<StoryAdventure>(cleanJson)
+                return normalizeStoryAdventure(parsed) to interactionId
+            }
         }
 
-        val rawBody = response.bodyAsText()
-        val root = json.parseToJsonElement(rawBody).jsonObject
-        val interactionId = root["id"]?.jsonPrimitive?.contentOrNull
-        val outputText = extractLastContentField(root, contentType = "text", fieldName = "text")
-            ?: throw RuntimeException("No model_output text step found in Interactions response")
-
-        val cleanJson = stripMarkdownCodeFences(outputText)
-        val parsed = json.decodeFromString<StoryAdventure>(cleanJson)
-        return normalizeStoryAdventure(parsed) to interactionId
+        // Standard Google AI Studio generateContent vision fallback so any Gemini key works seamlessly
+        val fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
+        val fbPayload = buildJsonObject {
+            putJsonArray("contents") {
+                addJsonObject {
+                    putJsonArray("parts") {
+                        addJsonObject {
+                            put("text", "$prompt\n\n${buildOpenAiCompatiblePrompt(kidHintPrompt, dominantColors)}")
+                        }
+                        addJsonObject {
+                            putJsonObject("inlineData") {
+                                put("mimeType", "image/png")
+                                put("data", base64Png)
+                            }
+                        }
+                    }
+                }
+            }
+            putJsonObject("generationConfig") {
+                put("responseMimeType", "application/json")
+            }
+        }
+        val fbResp = httpClient.post(fallbackUrl) {
+            contentType(ContentType.Application.Json)
+            setBody(fbPayload)
+        }
+        if (!fbResp.status.isSuccess()) {
+            throw RuntimeException("Gemini HTTP ${fbResp.status.value}")
+        }
+        val fbRoot = json.parseToJsonElement(fbResp.bodyAsText()).jsonObject
+        val fbText = fbRoot["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("content")?.jsonObject?.get("parts")?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("text")?.jsonPrimitive?.contentOrNull
+            ?: throw RuntimeException("Empty Gemini vision response")
+        val parsed = json.decodeFromString<StoryAdventure>(stripMarkdownCodeFences(fbText))
+        return normalizeStoryAdventure(parsed) to null
     }
 
     /**

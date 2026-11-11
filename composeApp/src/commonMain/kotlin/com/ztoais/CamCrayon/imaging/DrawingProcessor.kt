@@ -46,7 +46,8 @@ object DrawingProcessor {
     /**
      * Takes a camera capture or drawing on paper (or a Nano Banana 2.1 character image)
      * and extracts the drawn character as a clean transparent puppet cutout with a white sticker outline!
-     * Uses border flood-fill so white areas *inside* the character (like eyes or spacesuit) remain opaque!
+     * Uses adaptive local-illumination paper estimation + border flood-fill + connected-component filtering
+     * so uneven room shadows or desk borders in real camera photos are stripped away while keeping interior whites!
      */
     fun extractCharacterFromPaper(source: RgbaBuffer, addStickerBorder: Boolean = true): RgbaBuffer {
         val targetMaxDim = 340
@@ -54,75 +55,133 @@ object DrawingProcessor {
         val w = scaled.width
         val h = scaled.height
 
-        // 1. Estimate background paper color from outer border ring
-        var sumR = 0L
-        var sumG = 0L
-        var sumB = 0L
-        var count = 0
-        for (x in 0 until w) {
-            for (y in listOf(0, 1, h - 2, h - 1)) {
-                if (y in 0 until h) {
-                    val p = scaled.getPixel(x, y)
-                    val a = (p ushr 24) and 0xFF
-                    if (a > 128) {
-                        sumR += (p ushr 16) and 0xFF
-                        sumG += (p ushr 8) and 0xFF
-                        sumB += p and 0xFF
-                        count++
+        // 1. Compute local paper illumination across an 8x8 spatial grid (using upper quartile brightness in each cell)
+        // so shadows or uneven room lighting across a camera photo of paper are normalized automatically.
+        val gridCols = 8
+        val gridRows = 8
+        val gridR = IntArray(gridCols * gridRows)
+        val gridG = IntArray(gridCols * gridRows)
+        val gridB = IntArray(gridCols * gridRows)
+        val gridLum = IntArray(gridCols * gridRows)
+
+        for (gy in 0 until gridRows) {
+            val y0 = (gy * h) / gridRows
+            val y1 = (((gy + 1) * h) / gridRows).coerceAtMost(h)
+            for (gx in 0 until gridCols) {
+                val x0 = (gx * w) / gridCols
+                val x1 = (((gx + 1) * w) / gridCols).coerceAtMost(w)
+
+                // Find bright low-saturation paper pixels in this cell
+                var sumR = 0L
+                var sumG = 0L
+                var sumB = 0L
+                var sumLum = 0L
+                var count = 0
+                for (y in y0 until y1 step 2) {
+                    for (x in x0 until x1 step 2) {
+                        val p = scaled.getPixel(x, y)
+                        val a = (p ushr 24) and 0xFF
+                        if (a < 100) continue
+                        val r = (p ushr 16) and 0xFF
+                        val g = (p ushr 8) and 0xFF
+                        val b = p and 0xFF
+                        val maxC = maxOf(r, g, b)
+                        val minC = minOf(r, g, b)
+                        val sat = if (maxC == 0) 0 else ((maxC - minC) * 255) / maxC
+                        val lum = (r * 299 + g * 587 + b * 114) / 1000
+                        if (sat < 55 && lum > 115) {
+                            sumR += r
+                            sumG += g
+                            sumB += b
+                            sumLum += lum
+                            count++
+                        }
                     }
                 }
-            }
-        }
-        for (y in 0 until h) {
-            for (x in listOf(0, 1, w - 2, w - 1)) {
-                if (x in 0 until w) {
-                    val p = scaled.getPixel(x, y)
-                    val a = (p ushr 24) and 0xFF
-                    if (a > 128) {
-                        sumR += (p ushr 16) and 0xFF
-                        sumG += (p ushr 8) and 0xFF
-                        sumB += p and 0xFF
-                        count++
-                    }
+                val cellIdx = gy * gridCols + gx
+                if (count > 0) {
+                    gridR[cellIdx] = (sumR / count).toInt()
+                    gridG[cellIdx] = (sumG / count).toInt()
+                    gridB[cellIdx] = (sumB / count).toInt()
+                    gridLum[cellIdx] = (sumLum / count).toInt()
+                } else {
+                    gridR[cellIdx] = 235
+                    gridG[cellIdx] = 232
+                    gridB[cellIdx] = 225
+                    gridLum[cellIdx] = 232
                 }
             }
         }
 
-        val bgR = if (count > 0) (sumR / count).toInt() else 248
-        val bgG = if (count > 0) (sumG / count).toInt() else 246
-        val bgB = if (count > 0) (sumB / count).toInt() else 240
+        // Smooth the grid so cells mostly covered by a large drawing still inherit neighbor paper brightness
+        val smoothLum = gridLum.copyOf()
+        for (gy in 0 until gridRows) {
+            for (gx in 0 until gridCols) {
+                var maxNeighborLum = gridLum[gy * gridCols + gx]
+                for (dy in -1..1) {
+                    for (dx in -1..1) {
+                        val nx = (gx + dx).coerceIn(0, gridCols - 1)
+                        val ny = (gy + dy).coerceIn(0, gridRows - 1)
+                        maxNeighborLum = maxOf(maxNeighborLum, gridLum[ny * gridCols + nx])
+                    }
+                }
+                smoothLum[gy * gridCols + gx] = maxNeighborLum
+            }
+        }
 
-        // 2. Classify each pixel as candidate paper-background vs colorful/dark crayon foreground
+        // 2. Classify each pixel as candidate paper/border background vs colorful/dark crayon foreground
         val isPaperLike = BooleanArray(w * h)
-        for (idx in 0 until w * h) {
-            val p = scaled.pixels[idx]
-            val a = (p ushr 24) and 0xFF
-            if (a < 40) {
-                isPaperLike[idx] = true
-                continue
+        val borderMarginX = (w * 0.04f).toInt().coerceAtLeast(2)
+        val borderMarginY = (h * 0.04f).toInt().coerceAtLeast(2)
+
+        for (y in 0 until h) {
+            val gy = ((y * gridRows) / h).coerceIn(0, gridCols - 1)
+            for (x in 0 until w) {
+                val idx = y * w + x
+                val p = scaled.pixels[idx]
+                val a = (p ushr 24) and 0xFF
+                if (a < 45) {
+                    isPaperLike[idx] = true
+                    continue
+                }
+
+                // Treat outermost 4% camera frame edge as passable so a dark desk edge around the paper doesn't trap the paper
+                if (x < borderMarginX || x >= w - borderMarginX || y < borderMarginY || y >= h - borderMarginY) {
+                    isPaperLike[idx] = true
+                    continue
+                }
+
+                val gx = ((x * gridCols) / w).coerceIn(0, gridCols - 1)
+                val cellIdx = gy * gridCols + gx
+                val locR = gridR[cellIdx]
+                val locG = gridG[cellIdx]
+                val locB = gridB[cellIdx]
+                val locLum = smoothLum[cellIdx]
+
+                val r = (p ushr 16) and 0xFF
+                val g = (p ushr 8) and 0xFF
+                val b = p and 0xFF
+
+                val maxC = maxOf(r, g, b)
+                val minC = minOf(r, g, b)
+                val saturation = if (maxC == 0) 0 else ((maxC - minC) * 255) / maxC
+                val lum = (r * 299 + g * 587 + b * 114) / 1000
+
+                val dr = r - locR
+                val dg = g - locG
+                val db = b - locB
+                val distFromLocalPaper = sqrt((dr * dr + dg * dg + db * db).toDouble())
+                val darkerThanPaper = locLum - lum
+
+                // Faint ruled notebook lines or shadowy white/cream paper have low saturation and are close to local paper luminance
+                val isNotebookLine = (darkerThanPaper < 38 && saturation < 62 && distFromLocalPaper < 66.0)
+                val isShadowyPaper = (darkerThanPaper < 30 && saturation < 48) || (lum > 215 && saturation < 35)
+
+                isPaperLike[idx] = isShadowyPaper || isNotebookLine
             }
-            val r = (p ushr 16) and 0xFF
-            val g = (p ushr 8) and 0xFF
-            val b = p and 0xFF
-
-            val maxC = maxOf(r, g, b)
-            val minC = minOf(r, g, b)
-            val saturation = if (maxC == 0) 0 else ((maxC - minC) * 255) / maxC
-            val lum = (r * 299 + g * 587 + b * 114) / 1000
-
-            val dr = r - bgR
-            val dg = g - bgG
-            val db = b - bgB
-            val distFromPaper = sqrt((dr * dr + dg * dg + db * db).toDouble())
-
-            // Faint ruled notebook lines or paper texture have low saturation and high luminance
-            val isNotebookLine = (lum > 185 && saturation < 55 && distFromPaper < 62.0)
-            val isCloseToPaper = (distFromPaper < 44.0 && saturation < 42) || (lum > 228 && saturation < 28)
-
-            isPaperLike[idx] = isCloseToPaper || isNotebookLine
         }
 
-        // 3. Flood-fill from all 4 edges through paper-like pixels to find true exterior background
+        // 3. Flood-fill from outer perimeter AND outer 10% paper ring through paper-like pixels to find true exterior background
         val isExteriorBg = BooleanArray(w * h)
         val queue = IntArray(w * h)
         var head = 0
@@ -140,10 +199,14 @@ object DrawingProcessor {
         for (x in 0 until w) {
             tryEnqueue(x, 0)
             tryEnqueue(x, h - 1)
+            tryEnqueue(x, borderMarginY)
+            tryEnqueue(x, h - 1 - borderMarginY)
         }
         for (y in 0 until h) {
             tryEnqueue(0, y)
             tryEnqueue(w - 1, y)
+            tryEnqueue(borderMarginX, y)
+            tryEnqueue(w - 1 - borderMarginX, y)
         }
 
         while (head < tail) {
@@ -156,8 +219,45 @@ object DrawingProcessor {
             tryEnqueue(cx, cy - 1)
         }
 
-        // Also clear isolated tiny 1-2px paper speckles outside main subject
+        // 4. Connected-component filtering to remove tiny isolated camera sensor speckles (< 18px)
         val fgMask = BooleanArray(w * h)
+        for (i in 0 until w * h) {
+            fgMask[i] = !isExteriorBg[i]
+        }
+
+        val visited = BooleanArray(w * h)
+        val compQueue = IntArray(w * h)
+        for (startIdx in 0 until w * h) {
+            if (!fgMask[startIdx] || visited[startIdx]) continue
+            var cHead = 0
+            var cTail = 0
+            compQueue[cTail++] = startIdx
+            visited[startIdx] = true
+            while (cHead < cTail) {
+                val curr = compQueue[cHead++]
+                val cx = curr % w
+                val cy = curr / w
+                val neighbors = intArrayOf(
+                    if (cx + 1 < w) curr + 1 else -1,
+                    if (cx - 1 >= 0) curr - 1 else -1,
+                    if (cy + 1 < h) curr + w else -1,
+                    if (cy - 1 >= 0) curr - w else -1
+                )
+                for (nb in neighbors) {
+                    if (nb >= 0 && fgMask[nb] && !visited[nb]) {
+                        visited[nb] = true
+                        compQueue[cTail++] = nb
+                    }
+                }
+            }
+            // Clear tiny isolated camera speckles so only real character strokes remain
+            if (cTail < 18) {
+                for (k in 0 until cTail) {
+                    fgMask[compQueue[k]] = false
+                }
+            }
+        }
+
         var minX = w
         var minY = h
         var maxX = 0
@@ -167,8 +267,7 @@ object DrawingProcessor {
         for (y in 0 until h) {
             for (x in 0 until w) {
                 val i = y * w + x
-                if (!isExteriorBg[i]) {
-                    fgMask[i] = true
+                if (fgMask[i]) {
                     fgCount++
                     if (x < minX) minX = x
                     if (x > maxX) maxX = x
@@ -953,6 +1052,188 @@ object DrawingProcessor {
                 )
             )
         }
+    }
+
+    /**
+     * Transforms a child's raw paper cutout into a lush, 3D-shaded Storybook Character Sprite!
+     * - Fills rough crayon scribble gaps via morphological closing
+     * - Applies 3D spherical Pixar/storybook lighting (top-left warm sunlight highlight + bottom ambient shadow + rim glow)
+     * - Enhances color vibrancy and adds a golden magical emblem so the character in the scene looks truly transformed
+     *   compared to the raw paper scan!
+     */
+    fun synthesizeLivingStorybookCharacter(
+        extractedCutout: RgbaBuffer
+    ): RgbaBuffer {
+        val w = extractedCutout.width
+        val h = extractedCutout.height
+        val out = RgbaBuffer(w, h)
+
+        // 1. Identify non-white character pixels vs white sticker border vs transparent background
+        val isCharBody = BooleanArray(w * h)
+        val bodyColors = IntArray(w * h)
+        var minX = w
+        var minY = h
+        var maxX = 0
+        var maxY = 0
+
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val i = y * w + x
+                val p = extractedCutout.pixels[i]
+                val a = (p ushr 24) and 0xFF
+                if (a > 128) {
+                    val r = (p ushr 16) and 0xFF
+                    val g = (p ushr 8) and 0xFF
+                    val b = p and 0xFF
+                    val isStickerWhite = (r > 248 && g > 248 && b > 248)
+                    if (!isStickerWhite) {
+                        isCharBody[i] = true
+                        bodyColors[i] = p
+                        if (x < minX) minX = x
+                        if (x > maxX) maxX = x
+                        if (y < minY) minY = y
+                        if (y > maxY) maxY = y
+                    }
+                }
+            }
+        }
+
+        if (minX >= maxX || minY >= maxY) {
+            return extractedCutout.copy()
+        }
+
+        // 2. Fill tiny 1-2px wax crayon gaps inside the character using neighbor color interpolation
+        // so the character surface looks like a solid, lush painted storybook illustration!
+        val filledBody = isCharBody.copyOf()
+        val filledColors = bodyColors.copyOf()
+        for (pass in 0 until 2) {
+            for (y in (minY + 1) until maxY) {
+                for (x in (minX + 1) until maxX) {
+                    val i = y * w + x
+                    if (!filledBody[i]) {
+                        var neighborCount = 0
+                        var sumR = 0
+                        var sumG = 0
+                        var sumB = 0
+                        for (dy in -2..2) {
+                            for (dx in -2..2) {
+                                val nx = x + dx
+                                val ny = y + dy
+                                if (nx in 0 until w && ny in 0 until h) {
+                                    val ni = ny * w + nx
+                                    if (filledBody[ni]) {
+                                        val np = filledColors[ni]
+                                        sumR += (np ushr 16) and 0xFF
+                                        sumG += (np ushr 8) and 0xFF
+                                        sumB += np and 0xFF
+                                        neighborCount++
+                                    }
+                                }
+                            }
+                        }
+                        if (neighborCount >= 12) {
+                            filledBody[i] = true
+                            filledColors[i] = argb(255, sumR / neighborCount, sumG / neighborCount, sumB / neighborCount)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Apply 3x3 bilateral color smoothing + 3D Spherical Storybook Shading & Rim Glow
+        val centerX = (minX + maxX) * 0.5f
+        val centerY = (minY + maxY) * 0.5f
+        val radiusX = ((maxX - minX) * 0.5f).coerceAtLeast(1f)
+        val radiusY = ((maxY - minY) * 0.5f).coerceAtLeast(1f)
+
+        // Draw golden-cyan magical sticker glow around the character
+        val borderRadius = 5
+        for (y in minY..maxY) {
+            for (x in minX..maxX) {
+                if (filledBody[y * w + x]) {
+                    for (dy in -borderRadius..borderRadius) {
+                        for (dx in -borderRadius..borderRadius) {
+                            val d2 = dx * dx + dy * dy
+                            if (d2 <= borderRadius * borderRadius) {
+                                val ox = x + dx
+                                val oy = y + dy
+                                if (ox in 0 until w && oy in 0 until h && !filledBody[oy * w + ox]) {
+                                    val edgeColor = if (d2 <= 6) argb(255, 255, 252, 235) else argb(210, 253, 224, 71)
+                                    out.setPixel(ox, oy, edgeColor)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Shade interior character pixels with 3D volumetric lighting (top-left light source)
+        val lightDirX = -0.45f
+        val lightDirY = -0.55f
+        for (y in minY..maxY) {
+            for (x in minX..maxX) {
+                val i = y * w + x
+                if (!filledBody[i]) continue
+
+                // Smooth color with 3x3 similar neighbors
+                val baseP = filledColors[i]
+                val br = (baseP ushr 16) and 0xFF
+                val bg = (baseP ushr 8) and 0xFF
+                val bb = baseP and 0xFF
+
+                var sR = br * 2
+                var sG = bg * 2
+                var sB = bb * 2
+                var wSum = 2
+                for (dy in -1..1) {
+                    for (dx in -1..1) {
+                        val nx = x + dx
+                        val ny = y + dy
+                        if (nx in 0 until w && ny in 0 until h && filledBody[ny * w + nx]) {
+                            val np = filledColors[ny * w + nx]
+                            val nr = (np ushr 16) and 0xFF
+                            val ng = (np ushr 8) and 0xFF
+                            val nb = np and 0xFF
+                            if (abs(nr - br) + abs(ng - bg) + abs(nb - bb) < 95) {
+                                sR += nr
+                                sG += ng
+                                sB += nb
+                                wSum++
+                            }
+                        }
+                    }
+                }
+                var r = sR / wSum
+                var g = sG / wSum
+                var b = sB / wSum
+
+                // Boost saturation so storybook character pops vividly
+                val avg = (r + g + b) / 3
+                r = (avg + ((r - avg) * 1.32f).toInt()).coerceIn(0, 255)
+                g = (avg + ((g - avg) * 1.32f).toInt()).coerceIn(0, 255)
+                b = (avg + ((b - avg) * 1.32f).toInt()).coerceIn(0, 255)
+
+                // Compute normalized 3D normal on ellipsoid for volumetric storybook shading
+                val nx = (x - centerX) / radiusX
+                val ny = (y - centerY) / radiusY
+                val dotLight = (nx * lightDirX + ny * lightDirY).coerceIn(-1f, 1f)
+
+                // Keep dark ink outlines dark and crisp; apply 3D highlight/shadow to colored surfaces
+                val lum = (r * 299 + g * 587 + b * 114) / 1000
+                if (lum > 55) {
+                    val shadeFactor = 1.04f + dotLight * 0.24f
+                    val specular = if (dotLight > 0.35f) ((dotLight - 0.35f) * 48f).toInt() else 0
+                    r = (r * shadeFactor + specular).toInt().coerceIn(0, 255)
+                    g = (g * shadeFactor + specular).toInt().coerceIn(0, 255)
+                    b = (b * shadeFactor + specular * 0.8f).toInt().coerceIn(0, 255)
+                }
+
+                out.setPixel(x, y, argb(255, r, g, b))
+            }
+        }
+
+        return out
     }
 
     private fun argb(a: Int, r: Int, g: Int, b: Int): Int {

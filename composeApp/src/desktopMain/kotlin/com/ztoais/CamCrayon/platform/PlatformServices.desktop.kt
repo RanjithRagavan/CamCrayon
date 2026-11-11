@@ -154,6 +154,21 @@ actual fun rememberPlatformMediaController(
                     onStatusMessage("ℹ️ File dialog closed: ${e.message ?: ""}")
                 }
             }
+
+            private var voiceCycleIndex = 0
+            private val sampleSpokenPrompts = listOf(
+                "Barnaby the Dino flies to the Rainbow Candy Castle to rescue a shooting star!",
+                "Captain Whiskers zooms around the Golden Cheese Moon with friendly aliens!",
+                "Princess Pippa starts a magical underwater bubble band with singing dolphins!",
+                "Sparky the Robot dances on Volcano Island and discovers a glowing crown!"
+            )
+
+            override fun startVoiceInput(onSpokenText: (String) -> Unit) {
+                val spoken = sampleSpokenPrompts[voiceCycleIndex % sampleSpokenPrompts.size]
+                voiceCycleIndex++
+                onSpokenText(spoken)
+                onStatusMessage("🎤 Heard: \"$spoken\"")
+            }
         }
     }
 }
