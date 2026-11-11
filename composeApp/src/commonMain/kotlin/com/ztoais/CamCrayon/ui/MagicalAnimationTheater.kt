@@ -31,6 +31,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -165,93 +166,191 @@ fun MagicalAnimationTheater(
         bundle.extractedCharacterBitmap
     }
 
-    Column(
+    val triggerMagicBurst = {
+        magicWandBurstTime = timeSec
+        superJumpBoostTime = timeSec
+        SoundEngine.playEffect(SoundEffectType.MAGIC_WAND_CHIME)
+        val rng = Random((timeSec * 1000).toInt())
+        repeat(40) {
+            val angle = rng.nextFloat() * 2f * PI.toFloat()
+            val speed = 150f + rng.nextFloat() * 320f
+            burstParticles.add(
+                MagicParticle(
+                    x = characterScreenCenter.x,
+                    y = characterScreenCenter.y,
+                    vx = cos(angle) * speed,
+                    vy = sin(angle) * speed - 60f,
+                    size = 8f + rng.nextFloat() * 10f,
+                    color = listOf(
+                        Color(0xFFFFD54F),
+                        Color(0xFFF472B6),
+                        Color(0xFF38BDF8),
+                        Color(0xFF4ADE80)
+                    ).random(rng),
+                    alpha = 1f,
+                    isBurst = true
+                )
+            )
+        }
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0F172A))
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
-        // 1. Top Story Header Bar
-        Row(
+        val isCompact = maxWidth < 760.dp
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xFF1E293B))
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .fillMaxSize()
+                .padding(if (isCompact) 8.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                FilledTonalButton(
-                    onClick = {
-                        SoundEngine.stop()
-                        onBackToStudio()
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            // 1. Top Story Header Bar
+            if (isCompact) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1E293B))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Scan New Drawing", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                SoundEngine.stop()
+                                onBackToStudio()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("New Scan", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
+                        }
 
-                Column {
-                    Text(
-                        text = "✨ ${story.storyTitle}",
-                        color = Color(0xFFFDE047),
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 17.sp,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "Starring ${story.characterName} (${story.characterSpeciesOrType}) • Superpower: ${story.superpower}",
-                        color = Color(0xFFCBD5E1),
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
-                }
-            }
+                        Spacer(Modifier.width(8.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (bundle.aiEnhancedBitmap != null) {
-                    FilterChip(
-                        selected = showAiEnhancedPuppet,
-                        onClick = { showAiEnhancedPuppet = !showAiEnhancedPuppet },
-                        label = {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                if (showAiEnhancedPuppet) "🎨 Nano Banana 2.1 Art" else "🖍️ Original Crayon Cutout",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "✨ ${story.storyTitle}",
+                                color = Color(0xFFFDE047),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${story.characterName} • ${story.superpower}",
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                    )
+
+                        IconButton(
+                            onClick = { isPaused = !isPaused },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = "Play/Pause",
+                                tint = Color.White
+                            )
+                        }
+                    }
                 }
-
-                FilterChip(
-                    selected = showLivingFaceOverlay,
-                    onClick = { showLivingFaceOverlay = !showLivingFaceOverlay },
-                    label = { Text("👀 Living Eyes & Talk", fontSize = 12.sp) }
-                )
-
-                IconButton(
-                    onClick = { isPaused = !isPaused }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF1E293B))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = "Play/Pause",
-                        tint = Color.White
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                SoundEngine.stop()
+                                onBackToStudio()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Scan New Drawing", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "✨ ${story.storyTitle}",
+                                color = Color(0xFFFDE047),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 17.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Starring ${story.characterName} (${story.characterSpeciesOrType}) • Superpower: ${story.superpower}",
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (bundle.aiEnhancedBitmap != null) {
+                            FilterChip(
+                                selected = showAiEnhancedPuppet,
+                                onClick = { showAiEnhancedPuppet = !showAiEnhancedPuppet },
+                                label = {
+                                    Text(
+                                        if (showAiEnhancedPuppet) "🎨 Nano Banana 2.1 Art" else "🖍️ Original Crayon Cutout",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            )
+                        }
+
+                        FilterChip(
+                            selected = showLivingFaceOverlay,
+                            onClick = { showLivingFaceOverlay = !showLivingFaceOverlay },
+                            label = { Text("👀 Living Eyes & Talk", fontSize = 12.sp) }
+                        )
+
+                        IconButton(
+                            onClick = { isPaused = !isPaused }
+                        ) {
+                            Icon(
+                                if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = "Play/Pause",
+                                tint = Color.White
+                            )
+                        }
+                    }
                 }
             }
-        }
 
         // 2. Main 60 FPS Interactive Living Animation Stage
         Box(
@@ -446,28 +545,31 @@ fun MagicalAnimationTheater(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(14.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .padding(if (isCompact) 8.dp else 14.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF0F172A).copy(alpha = 0.78f))
-                    .padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    .padding(if (isCompact) 4.dp else 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 story.scenes.forEachIndexed { idx, s ->
                     val isSelected = idx == currentSceneIndex
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = if (isSelected) Color(0xFFF59E0B) else Color(0xFF334155),
                         modifier = Modifier.clickable {
                             currentSceneIndex = idx
                         }
                     ) {
                         Text(
-                            text = "Scene ${s.sceneNumber}",
+                            text = if (isCompact) "S${s.sceneNumber}" else "Scene ${s.sceneNumber}",
                             color = if (isSelected) Color(0xFF0F172A) else Color.White,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            fontSize = if (isCompact) 11.sp else 12.sp,
+                            modifier = Modifier.padding(
+                                horizontal = if (isCompact) 8.dp else 10.dp,
+                                vertical = if (isCompact) 4.dp else 5.dp
+                            )
                         )
                     }
                 }
@@ -477,35 +579,41 @@ fun MagicalAnimationTheater(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(14.dp),
+                    .padding(if (isCompact) 8.dp else 14.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
                     color = Color(0xFFFEF08A),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     shadowElevation = 6.dp
                 ) {
                     Text(
                         text = currentScene.soundEffectOnomatopoeia,
                         color = Color(0xFF9A3412),
                         fontWeight = FontWeight.Black,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        fontSize = if (isCompact) 12.sp else 15.sp,
+                        maxLines = 1,
+                        modifier = Modifier.padding(
+                            horizontal = if (isCompact) 8.dp else 12.dp,
+                            vertical = if (isCompact) 4.dp else 6.dp
+                        )
                     )
                 }
 
-                Surface(
-                    color = Color(0xFF0F172A).copy(alpha = 0.75f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "👆 Tap or Drag ${story.characterName} to Jump & Fly!",
-                        color = Color(0xFF7DD3FC),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
+                if (!isCompact) {
+                    Surface(
+                        color = Color(0xFF0F172A).copy(alpha = 0.75f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "👆 Tap or Drag ${story.characterName} to Jump & Fly!",
+                            color = Color(0xFF7DD3FC),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -513,20 +621,23 @@ fun MagicalAnimationTheater(
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(14.dp),
+                    .padding(if (isCompact) 8.dp else 14.dp),
                 verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Mini Polaroid card of the original camera paper capture
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = Color.White,
                     shadowElevation = 8.dp,
-                    modifier = Modifier.size(width = 86.dp, height = 98.dp)
+                    modifier = Modifier.size(
+                        width = if (isCompact) 62.dp else 86.dp,
+                        height = if (isCompact) 72.dp else 98.dp
+                    )
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(5.dp)
+                        modifier = Modifier.padding(4.dp)
                     ) {
                         androidx.compose.foundation.Image(
                             bitmap = bundle.originalPaperBitmap,
@@ -534,128 +645,115 @@ fun MagicalAnimationTheater(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(6.dp))
                         )
                         Text(
-                            text = "📸 Camera Scan",
-                            fontSize = 9.sp,
+                            text = if (isCompact) "📸 Scan" else "📸 Camera Scan",
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
+                            color = Color(0xFF334155),
+                            maxLines = 1
                         )
                     }
                 }
 
                 // Speech bubble from character
                 Surface(
-                    shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 4.dp),
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp),
                     color = Color.White.copy(alpha = 0.95f),
                     shadowElevation = 8.dp,
-                    modifier = Modifier.widthIn(max = 360.dp)
+                    modifier = Modifier.widthIn(max = if (isCompact) 240.dp else 360.dp)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)) {
+                    Column(
+                        modifier = Modifier.padding(
+                            horizontal = if (isCompact) 10.dp else 14.dp,
+                            vertical = if (isCompact) 6.dp else 9.dp
+                        )
+                    ) {
                         Text(
                             text = "${story.characterName} says:",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF0284C7)
                         )
                         Text(
                             text = "\"${currentScene.characterSpeechBubble}\"",
-                            fontSize = 14.sp,
+                            fontSize = if (isCompact) 12.sp else 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
+                            color = Color(0xFF0F172A),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            // Floating Bottom-Right Magic Action Buttons (Magic Wand Burst, Read Aloud TTS, Omni Video)
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = {
-                        magicWandBurstTime = timeSec
-                        superJumpBoostTime = timeSec
-                        SoundEngine.playEffect(SoundEffectType.MAGIC_WAND_CHIME)
-                        val rng = Random((timeSec * 1000).toInt())
-                        repeat(40) {
-                            val angle = rng.nextFloat() * 2f * PI.toFloat()
-                            val speed = 150f + rng.nextFloat() * 320f
-                            burstParticles.add(
-                                MagicParticle(
-                                    x = characterScreenCenter.x,
-                                    y = characterScreenCenter.y,
-                                    vx = cos(angle) * speed,
-                                    vy = sin(angle) * speed - 60f,
-                                    size = 8f + rng.nextFloat() * 10f,
-                                    color = listOf(
-                                        Color(0xFFFFD54F),
-                                        Color(0xFFF472B6),
-                                        Color(0xFF38BDF8),
-                                        Color(0xFF4ADE80)
-                                    ).random(rng),
-                                    alpha = 1f,
-                                    isBurst = true
-                                )
-                            )
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC4899)),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            // Floating Bottom-Right Magic Action Buttons on Landscape/Desktop (Moved to bottom card on Portrait Phone to prevent overlap)
+            if (!isCompact) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("🪄 Magic Burst!", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-                }
+                    Button(
+                        onClick = triggerMagicBurst,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC4899)),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text("🪄 Magic Burst!", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    }
 
-                Button(
-                    onClick = { onRequestSceneTts(currentScene) },
-                    enabled = !isGeneratingTts,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    val hasCachedWav = bundle.sceneAudioWavBytes.containsKey(currentScene.sceneNumber)
-                    Text(
-                        when {
-                            isGeneratingTts -> "🎙️ Recording..."
-                            hasCachedWav -> "🔊 Replay Voiceover"
-                            else -> "🎙️ Read Aloud (Gemini TTS)"
-                        },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
+                    Button(
+                        onClick = { onRequestSceneTts(currentScene) },
+                        enabled = !isGeneratingTts,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        val hasCachedWav = bundle.sceneAudioWavBytes.containsKey(currentScene.sceneNumber)
+                        Text(
+                            when {
+                                isGeneratingTts -> "🎙️ Recording..."
+                                hasCachedWav -> "🔊 Replay Voiceover"
+                                else -> "🎙️ Read Aloud (Gemini TTS)"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
 
-                Button(
-                    onClick = { onRequestOmniVideo(currentScene) },
-                    enabled = !isGeneratingVideo,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        if (isGeneratingVideo) "🎬 Omni 1.2 Flash..." else "🎬 Omni 1.2 Video",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
+                    Button(
+                        onClick = { onRequestOmniVideo(currentScene) },
+                        enabled = !isGeneratingVideo,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            if (isGeneratingVideo) "🎬 Omni 1.2 Flash..." else "🎬 Omni 1.2 Video",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
 
         // 3. Karaoke Storybook Narration & Live Kid Remix Controls
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(18.dp),
             color = Color(0xFF1E293B),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(
+                    horizontal = if (isCompact) 12.dp else 16.dp,
+                    vertical = if (isCompact) 8.dp else 10.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -666,14 +764,20 @@ fun MagicalAnimationTheater(
                         text = "📖 ${currentScene.sceneTitle} (${activeBiome.emoji} ${activeBiome.label})",
                         color = Color(0xFF38BDF8),
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp
+                        fontSize = if (isCompact) 13.sp else 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
 
-                    Text(
-                        text = bundle.providerUsed,
-                        color = Color(0xFF94A3B8),
-                        fontSize = 11.sp
-                    )
+                    if (!isCompact) {
+                        Text(
+                            text = bundle.providerUsed,
+                            color = Color(0xFF94A3B8),
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
                 }
 
                 // Karaoke Highlighted Story Text
@@ -700,15 +804,71 @@ fun MagicalAnimationTheater(
 
                 Text(
                     text = annotatedNarration,
-                    fontSize = 16.sp,
-                    lineHeight = 22.sp
+                    fontSize = if (isCompact) 14.sp else 16.sp,
+                    lineHeight = if (isCompact) 19.sp else 22.sp
                 )
+
+                // On Compact Portrait Mobile, render the 3 Magic Action buttons here in a clean full-width row!
+                if (isCompact) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = triggerMagicBurst,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC4899)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("🪄 Burst!", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, maxLines = 1)
+                        }
+
+                        Button(
+                            onClick = { onRequestSceneTts(currentScene) },
+                            enabled = !isGeneratingTts,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1.2f)
+                        ) {
+                            val hasCachedWav = bundle.sceneAudioWavBytes.containsKey(currentScene.sceneNumber)
+                            Text(
+                                when {
+                                    isGeneratingTts -> "🎙️..."
+                                    hasCachedWav -> "🔊 Replay"
+                                    else -> "🎙️ Read Aloud"
+                                },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                maxLines = 1
+                            )
+                        }
+
+                        Button(
+                            onClick = { onRequestOmniVideo(currentScene) },
+                            enabled = !isGeneratingVideo,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                if (isGeneratingVideo) "🎬..." else "🎬 Video",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
 
                 AnimatedVisibility(visible = !omniVideoStatus.isNullOrBlank()) {
                     Text(
                         text = omniVideoStatus ?: "",
                         color = Color(0xFF4ADE80),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -722,10 +882,10 @@ fun MagicalAnimationTheater(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🎮 Kid Remix Moves:",
+                        text = "🎮 Moves:",
                         color = Color(0xFFFBBF24),
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                     MotionStyle.entries.forEach { style ->
                         val selected = activeMotion == style
@@ -752,7 +912,7 @@ fun MagicalAnimationTheater(
                         text = "✨ Magic:",
                         color = Color(0xFFF472B6),
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                     ParticleMagicType.entries.forEach { pm ->
                         val selected = activeParticleMagic == pm
@@ -775,6 +935,7 @@ fun MagicalAnimationTheater(
                     }
                 }
             }
+        }
         }
     }
 }

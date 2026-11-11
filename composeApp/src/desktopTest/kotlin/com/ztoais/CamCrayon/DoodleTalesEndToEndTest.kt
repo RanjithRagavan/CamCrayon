@@ -140,6 +140,39 @@ class DoodleTalesEndToEndTest {
         assertTrue(theaterFile2.exists() && theaterFile2.length() > 20_000, "Theater frame 2 should render cleanly (${theaterFile2.length()} bytes)")
         theaterScene.close()
 
-        println("✅ Studio UI rendered (${studioFile.length()} bytes) & Animation Theater rendered (${theaterFile1.length()} bytes) with 0 errors!")
+        // 3. Render Mobile Portrait Phone Resolution (390x844) for both Studio and Animation Theater
+        val portraitStudioScene = ImageComposeScene(width = 390, height = 844, density = Density(1f))
+        portraitStudioScene.setContent {
+            Box(Modifier.size(390.dp, 844.dp)) {
+                App()
+            }
+        }
+        val portraitStudioBytes = portraitStudioScene.render(nanoTime = 500_000_000L).encodeToData(EncodedImageFormat.PNG)!!.bytes
+        val portraitStudioFile = File(outDir, "studio_portrait.png")
+        portraitStudioFile.writeBytes(portraitStudioBytes)
+        assertTrue(portraitStudioFile.exists() && portraitStudioFile.length() > 15_000, "Mobile Portrait Studio screenshot should be non-empty (${portraitStudioFile.length()} bytes)")
+        portraitStudioScene.close()
+
+        val portraitTheaterScene = ImageComposeScene(width = 390, height = 844, density = Density(1f))
+        portraitTheaterScene.setContent {
+            Box(Modifier.size(390.dp, 844.dp)) {
+                MagicalAnimationTheater(
+                    bundle = bundle,
+                    onBackToStudio = {},
+                    onRequestSceneTts = {},
+                    onRequestOmniVideo = {},
+                    isGeneratingTts = false,
+                    isGeneratingVideo = false,
+                    omniVideoStatus = null
+                )
+            }
+        }
+        val portraitTheaterBytes = portraitTheaterScene.render(nanoTime = 500_000_000L).encodeToData(EncodedImageFormat.PNG)!!.bytes
+        val portraitTheaterFile = File(outDir, "theater_portrait.png")
+        portraitTheaterFile.writeBytes(portraitTheaterBytes)
+        assertTrue(portraitTheaterFile.exists() && portraitTheaterFile.length() > 15_000, "Mobile Portrait Theater screenshot should be non-empty (${portraitTheaterFile.length()} bytes)")
+        portraitTheaterScene.close()
+
+        println("✅ Studio UI rendered (${studioFile.length()} bytes), Portrait Studio (${portraitStudioFile.length()} bytes) & Portrait Theater (${portraitTheaterFile.length()} bytes) with 0 errors!")
     }
 }
