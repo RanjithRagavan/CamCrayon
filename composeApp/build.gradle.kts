@@ -88,6 +88,8 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            // Sign release APK with debug key by default so downloaded CI APKs install directly on Android devices
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -105,6 +107,7 @@ compose.desktop {
             packageName = "CamCrayon"
             packageVersion = "1.0.0"
             description = "CamCrayon - Turn Kids' Camera Drawings into Living Animated Stories"
+            includeAllModules = true
         }
     }
 }

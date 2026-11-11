@@ -1,0 +1,192 @@
+name: Build & Distribute CamCrayon (Android, iOS, macOS, Windows, Linux)
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create a downloadable GitHub Release from this build?"
+        required: false
+        default: true
+        type: boolean
+      release_tag:
+        description: "Release tag name (if creating a release)"
+        required: false
+        default: "v1.0.0"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  # ============================================================================
+  # 1. Android APKs (Debug + Signed Release) & Linux Desktop (.deb + Uber-JAR)
+  # ============================================================================
+  build-android-and-linux:
+    name: "🤖 Android APK & 🐧 Linux Desktop (.deb / JAR)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Desktop End-to-End Tests
+        run: ./gradlew :composeApp:desktopTest --no-daemon
+
+      - name: Build Android Debug & Signed Release APKs
+        run: ./gradlew :composeApp:assembleDebug :composeApp:assembleRelease --no-daemon
+
+      - name: Package Desktop Cross-Platform Uber-JAR & Linux .deb Installer
+        run: ./gradlew :composeApp:packageUberJarForCurrentOS :composeApp:packageDeb --no-daemon
+
+      - name: Prepare Android & Linux Artifacts
+        run: |
+          mkdir -p dist/android dist/linux
+          cp composeApp/build/outputs/apk/debug/*.apk dist/android/CamCrayon-Android-debug.apk
+          cp composeApp/build/outputs/apk/release/*.apk dist/android/CamCrayon-Android-release.apk
+          cp composeApp/build/compose/jars/*.jar dist/linux/
+          cp composeApp/build/compose/binaries/main/deb/*.deb dist/linux/
+
+      - name: Upload Android APKs (Installable on Phones & Tablets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CamCrayon-Android-APKs
+          path: dist/android/*.apk
+          if-no-files-found: error
+
+      - name: Upload Linux Desktop Installer (.deb) & Executable JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: CamCrayon-Desktop-Linux-Deb-and-Jar
+          path: dist/linux/*
+          if-no-files-found: error
+
+  # ============================================================================
+  # 2. macOS Native Desktop Installer (.dmg) & iOS Frameworks (Arm64 + Simulator)
+  # ============================================================================
+  build-macos-and-ios:
+    name: "🍎 macOS Desktop (.dmg) & 📱 iOS Framework"
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Package macOS Native .dmg Installer & macOS Uber-JAR
+        run: ./gradlew :composeApp:packageDmg :composeApp:packageUberJarForCurrentOS --no-daemon
+
+      - name: Build iOS Device (iosArm64) & Simulator (iosSimulatorArm64) Frameworks
+        run: ./gradlew :composeApp:linkReleaseFrameworkIosArm64 :composeApp:linkDebugFrameworkIosSimulatorArm64 --no-daemon
+
+      - name: Prepare macOS & iOS Artifacts
+        run: |
+          mkdir -p dist/macos dist/ios
+          cp composeApp/build/compose/binaries/main/dmg/*.dmg dist/macos/
+          cp composeApp/build/compose/jars/*.jar dist/macos/
+          cd composeApp/build/bin
+          zip -r ../../../dist/ios/CamCrayon-iOS-Frameworks-and-XcodeWrapper.zip \
+            iosArm64/releaseFramework/ComposeApp.framework \
+            iosSimulatorArm64/debugFramework/ComposeApp.framework \
+            ../../../iosApp
+
+      - name: Upload macOS Desktop Installer (.dmg & .jar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CamCrayon-Desktop-macOS-DMG
+          path: dist/macos/*
+          if-no-files-found: error
+
+      - name: Upload iOS Frameworks & Xcode Project Bundle (.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CamCrayon-iOS-Frameworks
+          path: dist/ios/*.zip
+          if-no-files-found: error
+
+  # ============================================================================
+  # 3. Windows Native Desktop Installer (.msi & Executable JAR)
+  # ============================================================================
+  build-windows:
+    name: "🪟 Windows Desktop (.msi / JAR)"
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Package Windows Native .msi Installer & Windows Uber-JAR
+        run: ./gradlew :composeApp:packageMsi :composeApp:packageUberJarForCurrentOS --no-daemon
+
+      - name: Upload Windows Desktop Installer (.msi & .jar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CamCrayon-Desktop-Windows-MSI
+          path: |
+            composeApp/build/compose/binaries/main/msi/*.msi
+            composeApp/build/compose/jars/*.jar
+          if-no-files-found: error
+
+  # ============================================================================
+  # 4. Publish Unified GitHub Release (on tag push or manual workflow_dispatch)
+  # ============================================================================
+  publish-release:
+    name: "🚀 Publish Downloadable GitHub Release"
+    needs: [ build-android-and-linux, build-macos-and-ios, build-windows ]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
+    steps:
+      - name: Download All Built Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List Packaged Distributables
+        run: ls -lh release-assets/
+
+      - name: Create / Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag || 'v1.0.0' }}
+          name: "CamCrayon ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag || 'v1.0.0' }} — Multi-Platform Builds"
+          body: |
+            ## 🖍️📸 CamCrayon: Magic Living Drawings — Downloadable Builds
+            
+            Download the ready-to-run build for your platform below:
+            - **🤖 Android Phone / Tablet**: `CamCrayon-Android-release.apk` (or `CamCrayon-Android-debug.apk`)
+            - **🍎 macOS Desktop (Apple Silicon / Intel)**: `CamCrayon-1.0.0.dmg`
+            - **🪟 Windows Desktop**: `CamCrayon-1.0.0.msi`
+            - **🐧 Linux Desktop (Ubuntu / Debian)**: `camcrayon_1.0.0-1_amd64.deb`
+            - **☕ Cross-Platform Standalone Uber-JAR**: `CamCrayon-*-1.0.0.jar` (`java -jar CamCrayon-*.jar`)
+            - **📱 iOS Frameworks & Xcode Project**: `CamCrayon-iOS-Frameworks-and-XcodeWrapper.zip`
+          files: release-assets/*
+          draft: false
+          prerelease: false
